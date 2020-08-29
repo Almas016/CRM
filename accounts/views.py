@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
 from .models import *
-from .forms import OrderForm, CreateUserForm
+from .forms import OrderForm, CreateUserForm, CustomerForm
 from .filters import OrderFilter
 from .decorators import unauthenticated_user, allowed_users, admin_only
 
@@ -25,11 +25,8 @@ def registerPage(request):
                 user=user,
                 name=user.username,
             )
-
             messages.success(request, 'Account was created for ' + username)
-
             return redirect('login')
-
     context = {'form': form}
     return render(request, 'accounts/register.html', context)
 
@@ -91,6 +88,21 @@ def userPage(request):
 
 
 @login_required(login_url='login')
+@allowed_users(allowed_roles=['customer'])
+def accountSettings(request):
+    customer = request.user.customer
+    form = CustomerForm(instance=customer)
+
+    if request.method == 'POST':
+        form = CustomerForm(request.POST, request.FILES, instance=customer)
+        if form.is_valid():
+            form.save()
+
+    context = {'form': form}
+    return render(request, 'accounts/account_settings.html', context)
+
+
+@login_required(login_url='login')
 @allowed_users(allowed_roles=['admin'])
 def products(request):
     products = Product.objects.all()
@@ -120,10 +132,7 @@ def createOrder(request, pk):
     OrderFormSet = inlineformset_factory(Customer, Order, fields=('product', 'status'), extra=10)
     customer = Customer.objects.get(id=pk)
     formset = OrderFormSet(queryset=Order.objects.none(), instance=customer)
-    # form = OrderForm(initial={'customer':customer})
     if request.method == 'POST':
-        # print('Printing POST:', request.POST)
-        form = OrderForm(request.POST)
         formset = OrderFormSet(request.POST, instance=customer)
         if formset.is_valid():
             formset.save()
@@ -138,8 +147,9 @@ def createOrder(request, pk):
 def updateOrder(request, pk):
     order = Order.objects.get(id=pk)
     form = OrderForm(instance=order)
-
+    print('ORDER:', order)
     if request.method == 'POST':
+
         form = OrderForm(request.POST, instance=order)
         if form.is_valid():
             form.save()
